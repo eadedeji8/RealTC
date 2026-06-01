@@ -130,6 +130,28 @@ function loadRecharts() {
   return __rechartsPromise;
 }
 
+// ── pdf.js loader — for client-side PDF text extraction ─────────────────────
+let __pdfjsPromise = null;
+function loadPdfJs() {
+  if (typeof window !== "undefined" && window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (__pdfjsPromise) return __pdfjsPromise;
+  __pdfjsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => {
+      const lib = window.pdfjsLib;
+      if (lib && lib.GlobalWorkerOptions) {
+        lib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      }
+      resolve(lib);
+    };
+    s.onerror = () => reject(new Error("failed to load pdf.js"));
+    document.head.appendChild(s);
+  });
+  return __pdfjsPromise;
+}
+
 // ── StockChart — responsive line chart (recharts in ticker mode, SVG otherwise)
 function StockChart({ data, annotations = [], height = 140, ticker }) {
   if (ticker) return <StockChartLive ticker={ticker} height={height} />;
@@ -367,5 +389,5 @@ function CountUp({ value, duration = 1100, format = fmtMoney }) {
 Object.assign(window, {
   fmtMoney, fmtK,
   BrandMark, JargonTerm, ExplainToggle, StockChart, StockChartLive, Modal, CountUp,
-  getStockData,
+  getStockData, loadPdfJs,
 });
