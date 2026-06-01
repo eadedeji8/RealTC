@@ -12,29 +12,55 @@ const OFFER = {
   bonusPct: 0.10,
 };
 
+// BRIEF — the Claude-generated company/location context (taxes, rent, perks,
+// layoffs, demographics, flags). Seeded with Snap demo data so the initial
+// render isn't empty; mutated in place by applyBrief() after an offer decodes.
+const BRIEF = {
+  ticker: "SNAP",
+  companyDomain: "snap.com",
+  isPublic: true,
+  location: {
+    city: "Los Angeles", state: "CA",
+    fedEffectiveRate: 0.22, stateEffectiveRate: 0.08, ficaRate: 0.0765,
+    monthlyRent1br: 2400, costOfLivingIndex: 150,
+    demographics: {
+      summary: "Los Angeles is one of the most diverse metros in the US, with large Latino, Asian, and Black communities.",
+      notableGroups: ["Latino/Hispanic", "Asian American", "Black"],
+      notes: "High cost of living and car-dependent, but deep cultural communities and warm climate year-round.",
+    },
+  },
+  benefits: [],
+  layoffs: [],
+  missingFlags: [],
+  stockNarrative: null,
+  rsuNote: null,
+  caveats: "All figures here are estimates to help you ask better questions — not tax or legal advice. Have a lawyer review any contract language.",
+};
+
 // Rough, transparent first-year take-home calculation.
 // Year 1 gross: base + sign-on + 25% of RSU grant (vests after cliff) + bonus target.
-// Deductions: federal effective ~22%, CA state effective ~8%, FICA 7.65%, LA rent baseline.
-const Y1 = (() => {
-  const baseGross = OFFER.base;
-  const signOnGross = OFFER.signOn;
-  const rsuGross = OFFER.rsuTotal / OFFER.rsuYears; // year-1 vest
-  const bonusGross = OFFER.base * OFFER.bonusPct;
+// Tax rates + rent come from the brief when available, else sensible CA/LA defaults.
+function computeTakeHome(offer, brief) {
+  const loc = (brief && brief.location) || {};
+  const baseGross = offer.base;
+  const signOnGross = offer.signOn;
+  const rsuGross = offer.rsuYears > 0 ? offer.rsuTotal / offer.rsuYears : 0; // year-1 vest
+  const bonusGross = offer.base * offer.bonusPct;
   const totalGross = baseGross + signOnGross + rsuGross + bonusGross;
 
-  const FED_RATE = 0.22;
-  const CA_RATE = 0.08;
-  const FICA_RATE = 0.0765;
-  const combinedTax = FED_RATE + CA_RATE + FICA_RATE; // 0.3765
+  const fed = num(loc.fedEffectiveRate, 0.22);
+  const state = num(loc.stateEffectiveRate, 0.08);
+  const fica = num(loc.ficaRate, 0.0765);
+  const combinedTax = fed + state + fica;
 
-  // Sign-on & RSU are taxed as supplemental wages; model them at same effective rate for simplicity.
+  // Sign-on & RSU are taxed as supplemental wages; model them at the same effective rate for simplicity.
   const baseNet = Math.round(baseGross * (1 - combinedTax));
   const signOnNet = Math.round(signOnGross * (1 - combinedTax));
   const rsuNet = Math.round(rsuGross * (1 - combinedTax));
   const bonusNet = Math.round(bonusGross * (1 - combinedTax));
 
-  const RENT_LA_MONTHLY = 2400; // modest 1BR in a reasonable LA neighborhood
-  const rentAnnual = RENT_LA_MONTHLY * 12;
+  const rentMonthly = num(loc.monthlyRent1br, 2400);
+  const rentAnnual = rentMonthly * 12;
 
   const afterTax = baseNet + signOnNet + rsuNet + bonusNet;
   const afterRent = afterTax - rentAnnual;
@@ -46,11 +72,39 @@ const Y1 = (() => {
     rsuGross, rsuNet,
     bonusGross, bonusNet,
     afterTax,
+    combinedTax,
     rentAnnual,
-    rentMonthly: RENT_LA_MONTHLY,
+    rentMonthly,
     takeHome: afterRent,
   };
-})();
+}
+
+function num(v, fallback) {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+// Y1 is mutated in place (never reassigned) so every script that captured the
+// reference sees fresh numbers after a re-decode.
+const Y1 = {};
+Object.assign(Y1, computeTakeHome(OFFER, BRIEF));
+
+// Replace BRIEF's contents in place with a freshly generated brief, filling any
+// missing keys from the demo defaults so the UI never reads undefined.
+function applyBrief(next) {
+  if (!next || typeof next !== "object") return;
+  if (!next.location) next.location = BRIEF.location;
+  if (!next.location.demographics) next.location.demographics = { summary: null, notableGroups: [], notes: null };
+  if (!Array.isArray(next.benefits)) next.benefits = [];
+  if (!Array.isArray(next.layoffs)) next.layoffs = [];
+  if (!Array.isArray(next.missingFlags)) next.missingFlags = [];
+  Object.keys(BRIEF).forEach((k) => { delete BRIEF[k]; });
+  Object.assign(BRIEF, next);
+}
+
+// Recompute Y1 in place from the current OFFER + BRIEF.
+function recomputeY1() {
+  Object.assign(Y1, computeTakeHome(OFFER, BRIEF));
+}
 
 // Fictional ~5 year stock history (monthly closes). Mirrors the "dramatic IPO
 // with recent pullback + layoffs" scenario requested — starts around $12, rips
@@ -95,4 +149,7 @@ const JARGON = {
   "equity acceleration": "A clause that vests some or all of your unvested stock immediately if you're let go without cause or if the company is acquired.",
 };
 
-Object.assign(window, { OFFER, Y1, STOCK_HISTORY, STOCK_ANNOTATIONS, JARGON });
+Object.assign(window, {
+  OFFER, BRIEF, Y1, STOCK_HISTORY, STOCK_ANNOTATIONS, JARGON,
+  computeTakeHome, applyBrief, recomputeY1,
+});
