@@ -2,6 +2,8 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { parseOffer } = require("./lib/parseOffer");
+const { generateBrief } = require("./lib/generateBrief");
+const { getStockData } = require("./lib/getStockData");
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -24,6 +26,16 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "POST" && req.url === "/api/parse-offer") {
       await handleParseOffer(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/offer-brief") {
+      await handleOfferBrief(req, res);
+      return;
+    }
+
+    if (req.method === "GET" && req.url.startsWith("/api/stock")) {
+      await handleStock(req, res);
       return;
     }
 
@@ -51,6 +63,28 @@ async function handleParseOffer(req, res) {
   const body = await readJsonBody(req);
   const offer = await parseOffer(body.offerText);
   sendJson(res, 200, { offer });
+}
+
+async function handleOfferBrief(req, res) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    sendJson(res, 500, { error: "ANTHROPIC_API_KEY is missing. Add it to .env and restart npm start." });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  if (!body.offer || typeof body.offer !== "object") {
+    sendJson(res, 400, { error: "Request body must include a parsed { offer } object." });
+    return;
+  }
+  const brief = await generateBrief(body.offer);
+  sendJson(res, 200, { brief });
+}
+
+async function handleStock(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const ticker = url.searchParams.get("ticker") || "";
+  const points = await getStockData(ticker);
+  sendJson(res, 200, { points });
 }
 
 function serveStatic(req, res) {

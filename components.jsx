@@ -88,79 +88,25 @@ function ExplainToggle({ label = "Explain this to me", children }) {
 }
 
 // ── getStockData client + recharts loader ───────────────────────────────────
-// Mirrors lib/getStockData.ts. Browser uses the same cache + fallback shape.
+// The browser fetches real stock data through the server proxy (/api/stock) so
+// the Alpha Vantage key stays server-side. The server handles caching + fallbacks.
 const __stockCache = new Map();
-
-const __STOCK_FALLBACKS = {
-  SNAP: [
-    ["2021-05", 62.80], ["2021-08", 76.50], ["2021-11", 50.30], ["2022-02", 41.20],
-    ["2022-05", 19.10], ["2022-08", 11.60], ["2022-11", 9.10],  ["2023-02", 10.90],
-    ["2023-05", 9.40],  ["2023-08", 9.80],  ["2023-11", 14.90], ["2024-02", 11.30],
-    ["2024-05", 15.10], ["2024-08", 10.20], ["2024-11", 11.60], ["2025-02", 10.40],
-    ["2025-05", 10.60], ["2025-08", 9.40],  ["2025-11", 9.60],  ["2026-02", 9.80],
-    ["2026-04", 10.40],
-  ],
-  FIGMA: [
-    ["2024-07", 33.00], ["2024-09", 41.50], ["2024-11", 58.20], ["2025-01", 72.10],
-    ["2025-03", 64.80], ["2025-05", 81.40], ["2025-07", 95.20], ["2025-09", 88.60],
-    ["2025-11", 102.30],["2026-01", 114.50],["2026-03", 108.90],["2026-04", 112.40],
-  ],
-  META: [
-    ["2021-05", 328.70],["2021-08", 371.40],["2021-11", 324.50],["2022-02", 211.00],
-    ["2022-05", 193.60],["2022-08", 163.20],["2022-11", 118.10],["2023-02", 174.50],
-    ["2023-05", 263.80],["2023-08", 295.90],["2023-11", 327.10],["2024-02", 490.40],
-    ["2024-05", 465.90],["2024-08", 521.30],["2024-11", 578.20],["2025-02", 682.50],
-    ["2025-05", 620.10],["2025-08", 654.80],["2025-11", 598.30],["2026-02", 612.70],
-    ["2026-04", 605.40],
-  ],
-  GOOGL: [
-    ["2021-05", 118.40],["2021-08", 137.20],["2021-11", 142.90],["2022-02", 134.10],
-    ["2022-05", 113.20],["2022-08", 109.50],["2022-11", 94.80], ["2023-02", 90.30],
-    ["2023-05", 123.40],["2023-08", 137.60],["2023-11", 134.20],["2024-02", 140.10],
-    ["2024-05", 176.80],["2024-08", 164.30],["2024-11", 174.90],["2025-02", 191.30],
-    ["2025-05", 178.40],["2025-08", 195.60],["2025-11", 188.20],["2026-02", 192.70],
-    ["2026-04", 186.50],
-  ],
-};
-
-function __stockFallback(key) {
-  const rows = __STOCK_FALLBACKS[key] || __STOCK_FALLBACKS.SNAP;
-  return rows.map(([date, close]) => ({ date, close }));
-}
 
 async function getStockData(ticker) {
   const key = (ticker || "").toUpperCase().trim();
-  if (!key) return __stockFallback("SNAP");
+  if (!key) return [];
   if (__stockCache.has(key)) return __stockCache.get(key);
 
-  const apiKey = typeof window !== "undefined" ? window.ALPHA_VANTAGE_KEY : undefined;
-  if (!apiKey) {
-    const fb = __stockFallback(key);
-    __stockCache.set(key, fb);
-    return fb;
-  }
-
   try {
-    const url = "https://www.alphavantage.co/query?function=TIME_SERIES_MONTHLY" +
-      "&symbol=" + encodeURIComponent(key) + "&apikey=" + encodeURIComponent(apiKey);
-    const res = await fetch(url);
+    const res = await fetch("/api/stock?ticker=" + encodeURIComponent(key));
     if (!res.ok) throw new Error("bad status");
     const json = await res.json();
-    if (json.Note || json.Information || json["Error Message"] || !json["Monthly Time Series"]) {
-      throw new Error("rate limit or error");
-    }
-    const points = Object.entries(json["Monthly Time Series"])
-      .map(([date, row]) => ({ date: date.slice(0, 7), close: Number(row["4. close"]) }))
-      .filter((p) => Number.isFinite(p.close))
-      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-      .slice(-60);
-    if (points.length === 0) throw new Error("empty series");
+    const points = Array.isArray(json.points) ? json.points : [];
     __stockCache.set(key, points);
     return points;
   } catch {
-    const fb = __stockFallback(key);
-    __stockCache.set(key, fb);
-    return fb;
+    __stockCache.set(key, []);
+    return [];
   }
 }
 
@@ -294,6 +240,17 @@ function StockChartLive({ ticker, height = 180 }) {
     }
     return () => { cancelled = true; };
   }, [ticker]);
+
+  if (points && points.length === 0) {
+    return (
+      <div className="stock-live stock-live-empty">
+        <div className="stock-live-empty-msg">
+          No public stock data for {ticker ? ticker.toUpperCase() : "this company"}.
+          {" "}If this is a private company, its RSU value can&rsquo;t be charted &mdash; see the note below.
+        </div>
+      </div>
+    );
+  }
 
   const ready = points && Recharts;
 
