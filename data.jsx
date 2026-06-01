@@ -88,10 +88,79 @@ function num(v, fallback) {
 const Y1 = {};
 Object.assign(Y1, computeTakeHome(OFFER, BRIEF));
 
+// Coerce any value into something safe to render as a React text child. Claude
+// occasionally returns an object/array where the schema asked for a string
+// (e.g. notableGroups: [{group, pct}]); rendering that throws "Objects are not
+// valid as a React child" and blanks the whole page. asText flattens it.
+function asText(v) {
+  if (v == null) return null;
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return v.map(asText).filter(Boolean).join(", ");
+  if (typeof v === "object") {
+    return v.name || v.label || v.group || v.title || v.text || v.description
+      || Object.values(v).map(asText).filter(Boolean).join(" — ");
+  }
+  return String(v);
+}
+function asTextList(v) {
+  if (v == null) return [];
+  if (!Array.isArray(v)) return [asText(v)].filter(Boolean);
+  return v.map(asText).filter(Boolean);
+}
+function toNum(v) {
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Normalize a raw brief so every field the UI renders has the expected type.
+function sanitizeBrief(b) {
+  if (!b || typeof b !== "object") return b;
+  b.ticker = asText(b.ticker);
+  b.companyDomain = asText(b.companyDomain);
+  b.stockNarrative = asText(b.stockNarrative);
+  b.rsuNote = asText(b.rsuNote);
+  b.caveats = asText(b.caveats);
+  if (b.location && typeof b.location === "object") {
+    const L = b.location;
+    L.city = asText(L.city);
+    L.state = asText(L.state);
+    L.fedEffectiveRate = toNum(L.fedEffectiveRate);
+    L.stateEffectiveRate = toNum(L.stateEffectiveRate);
+    L.ficaRate = toNum(L.ficaRate);
+    L.monthlyRent1br = toNum(L.monthlyRent1br);
+    L.costOfLivingIndex = toNum(L.costOfLivingIndex);
+    if (L.demographics && typeof L.demographics === "object") {
+      L.demographics.summary = asText(L.demographics.summary);
+      L.demographics.notes = asText(L.demographics.notes);
+      L.demographics.notableGroups = asTextList(L.demographics.notableGroups);
+    }
+  }
+  if (Array.isArray(b.benefits)) b.benefits = b.benefits.map((x) => ({
+    name: asText(x && x.name) || "Benefit",
+    description: asText(x && x.description) || "",
+    estAnnualValueUSD: toNum(x && x.estAnnualValueUSD),
+    confidence: asText(x && x.confidence) || "low",
+  }));
+  if (Array.isArray(b.layoffs)) b.layoffs = b.layoffs.map((x) => ({
+    date: asText(x && x.date) || "",
+    pct: asText(x && x.pct),
+    approxCount: asText(x && x.approxCount),
+    teams: asTextList(x && x.teams),
+    notes: asText(x && x.notes),
+  }));
+  if (Array.isArray(b.missingFlags)) b.missingFlags = b.missingFlags.map((x) => ({
+    label: asText(x && x.label) || "Ask about this",
+    why: asText(x && x.why) || "",
+  }));
+  return b;
+}
+
 // Replace BRIEF's contents in place with a freshly generated brief, filling any
 // missing keys from the demo defaults so the UI never reads undefined.
 function applyBrief(next) {
   if (!next || typeof next !== "object") return;
+  sanitizeBrief(next);
   if (!next.location) next.location = BRIEF.location;
   if (!next.location.demographics) next.location.demographics = { summary: null, notableGroups: [], notes: null };
   if (!Array.isArray(next.benefits)) next.benefits = [];
@@ -151,5 +220,6 @@ const JARGON = {
 
 Object.assign(window, {
   OFFER, BRIEF, Y1, STOCK_HISTORY, STOCK_ANNOTATIONS, JARGON,
-  computeTakeHome, applyBrief, recomputeY1,
+  computeTakeHome, applyBrief, recomputeY1, num,
+  sanitizeBrief, asText, asTextList,
 });

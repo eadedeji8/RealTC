@@ -900,3 +900,18 @@ html[data-learn="on"] .tooltip { display: none !important; }
   .cmp-row { grid-template-columns: 1.2fr 1fr 1fr; }
   .cmp-metric, .cmp-cell { padding: 10px; font-size: 12.5px; }
 }
+
+/* Error boundary fallback */
+.error-fallback {
+  background: var(--card); border: 1px solid var(--warn-bd);
+  border-radius: var(--r-lg); padding: 32px; margin: 24px 0;
+  display: flex; flex-direction: column; gap: 14px; align-items: flex-start;
+}
+.error-fallback h2 { font-family: var(--font-serif); font-size: 22px; color: var(--ink); }
+.error-fallback p { font-size: 14.5px; color: var(--ink-80); line-height: 1.6; }
+.error-fallback-detail {
+  font-family: var(--font-mono); font-size: 12px; color: var(--warn);
+  background: var(--warn-soft); border-radius: var(--r-sm);
+  padding: 10px 12px; white-space: pre-wrap; word-break: break-word;
+  width: 100%; box-sizing: border-box;
+}

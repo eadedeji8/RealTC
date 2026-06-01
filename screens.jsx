@@ -722,4 +722,4 @@ const NEG_NOTES = {
   counter_signon: "Good alternative when base is locked by level bands. Sign-on is usually more flexible.",
 };
 
-Object.assign(window, { EquityScreen, LayoffScreen, NegotiationScreen });
+Object.assign(window, { ScreenShell, EquityScreen, LayoffScreen, NegotiationScreen });

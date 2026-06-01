@@ -17,6 +17,27 @@ function applyParsedOffer(parsed) {
   });
 }
 
+// ── ErrorBoundary — keeps one bad render from blanking the whole page ───────
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error("Render error:", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="error-fallback">
+          <h2>Something went wrong displaying this offer.</h2>
+          <p>The data came back in an unexpected shape. Your offer wasn&rsquo;t saved anywhere &mdash;
+             you can try decoding it again.</p>
+          <pre className="error-fallback-detail">{String(this.state.error && this.state.error.message)}</pre>
+          <button className="offer-input-btn" onClick={() => location.reload()}>Start over</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ── AIBadge — uncertainty label shown on every Claude-generated section ──────
 function AIBadge({ label = "AI estimate" }) {
   return (
@@ -573,7 +594,13 @@ function MissingCard() {
   );
 }
 
-function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+function cap(s) {
+  const str = s == null ? "" : String(s);
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+}
+// Expose helpers used cross-file (each .jsx is a separate <script>, so top-level
+// names are only shared via window — see the Object.assign pattern in other files).
+window.cap = cap;
 
 function NegotiationCTA({ onOpen }) {
   return (
@@ -772,7 +799,7 @@ function CompareScreen({ onBack }) {
           body: JSON.stringify({ offer: ob }),
         });
         const bp = await br.json();
-        if (br.ok && bp.brief) bb = bp.brief;
+        if (br.ok && bp.brief) bb = sanitizeBrief(bp.brief);
       } catch (e) { console.warn("brief B failed", e); }
       setOfferB(ob);
       setBriefB(bb);
@@ -936,6 +963,7 @@ function App() {
       )}
       <Header learn={t.learn} onLearn={(v) => setT("learn", v)} />
       <main className="page" key={screen}>
+        <ErrorBoundary key={screen + ":" + offerVersion}>
         {screen === "dashboard" && (
           <>
             <OfferInput onDecoded={() => setOfferVersion((v) => v + 1)} />
@@ -958,6 +986,7 @@ function App() {
         {screen === "layoff" && <LayoffScreen onBack={goBack} />}
         {screen === "negotiation" && <NegotiationScreen onBack={goBack} />}
         {screen === "compare" && <CompareScreen onBack={goBack} />}
+        </ErrorBoundary>
       </main>
       <Footer />
 
