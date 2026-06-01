@@ -29,9 +29,24 @@ function ScreenShell({ eyebrow, title, lede, onBack, children, toc }) {
 function EquityScreen({ onBack }) {
   const [scenario, setScenario] = uS("flat"); // flat | up | down | custom
   const [customPct, setCustomPct] = uS(0);
+  const [livePrice, setLivePrice] = uS(null);
 
-  // Current share price from stock history
-  const today = STOCK_HISTORY[STOCK_HISTORY.length - 1][1];
+  const isPrivate = BRIEF.isPublic === false || !BRIEF.ticker;
+
+  // Pull the latest real close for the company ticker (display only — totals are
+  // share-count invariant). Falls back to the demo series price.
+  uE(() => {
+    let cancelled = false;
+    if (BRIEF.ticker) {
+      getStockData(BRIEF.ticker).then((pts) => {
+        if (!cancelled && pts && pts.length) setLivePrice(pts[pts.length - 1].close);
+      });
+    }
+    return () => { cancelled = true; };
+  }, []);
+
+  const taxRate = Y1.combinedTax || 0.3765;
+  const today = livePrice || STOCK_HISTORY[STOCK_HISTORY.length - 1][1];
   // Total shares granted: RSU grant / current price
   const totalShares = Math.round(OFFER.rsuTotal / today);
   const sharesPerYear = totalShares / OFFER.rsuYears; // 25% year 1, then quarterly
@@ -56,21 +71,54 @@ function EquityScreen({ onBack }) {
       if (q === 4) shares = sharesPerYear; // cliff vest = full first year worth
       else if (q > 4) shares = sharesPerYear / 4; // quarterly after cliff
       const gross = shares * price;
-      const taxed = gross * (1 - 0.3765);
+      const taxed = gross * (1 - taxRate);
       out.push({ q, price, shares, gross, taxed });
     }
     return out;
-  }, [endPct, sharesPerYear, today]);
+  }, [endPct, sharesPerYear, today, taxRate]);
 
   const totalGross = vests.reduce((s, v) => s + v.gross, 0);
   const totalNet = vests.reduce((s, v) => s + v.taxed, 0);
   const offerSays = OFFER.rsuTotal;
   const delta = totalGross - offerSays;
 
+  if (isPrivate) {
+    return (
+      <ScreenShell
+        eyebrow="Equity reality check"
+        title={`Your ${fmtMoney(OFFER.rsuTotal)} RSU grant — a private valuation.`}
+        lede="This company isn't publicly traded, so there's no market price to model. That makes the equity the most uncertain part of your offer."
+        onBack={onBack}
+      >
+        <section className="eq-section">
+          <div className="equity-private">
+            <p>{BRIEF.rsuNote || (
+              <>For a private company, the <strong>{fmtMoney(OFFER.rsuTotal)}</strong> figure comes from an
+              internal 409A valuation, not a public market. You can&rsquo;t sell these shares until a liquidity
+              event (an IPO or acquisition) that may be years away &mdash; or never come. Treat this number as
+              a hopeful maximum, not money you can count on.</>
+            )}</p>
+          </div>
+          <div className="sec-hd" style={{ marginTop: 24 }}>
+            <h2>What to ask before you sign.</h2>
+          </div>
+          <ol className="eq-takeaways">
+            <li><strong>Ask for the strike price and total shares outstanding.</strong> Your grant&rsquo;s real
+              worth depends on what fraction of the company it represents.</li>
+            <li><strong>Ask about the last 409A / preferred valuation and date.</strong> A stale or inflated
+              valuation makes the headline number misleading.</li>
+            <li><strong>Ask about liquidity.</strong> Is there a tender-offer program, or do you wait for an exit?
+              What happens to unvested shares if you leave?</li>
+          </ol>
+        </section>
+      </ScreenShell>
+    );
+  }
+
   return (
     <ScreenShell
       eyebrow="Equity reality check"
-      title="Your $180k RSU grant, modeled honestly."
+      title={`Your ${fmtMoney(OFFER.rsuTotal)} RSU grant, modeled honestly.`}
       lede="The offer letter shows one number. Your actual payout depends on when each chunk vests and what the stock is worth on that day. Here&rsquo;s what could realistically happen."
       onBack={onBack}
     >
@@ -180,30 +228,40 @@ function EquityScreen({ onBack }) {
                year, further gains are taxed at the lower long-term capital gains rate. If it goes
                <em>down</em>, well &mdash; you already paid tax on the higher value. Ouch.</p>
           </div>
-          <div className="eq-tax-math">
-            <div className="eq-tax-row">
-              <span>Shares vest, worth</span>
-              <span className="eq-tax-v">{fmtMoney(OFFER.rsuTotal / OFFER.rsuYears)}</span>
-            </div>
-            <div className="eq-tax-row sub">
-              <span>&minus; Federal (22%)</span>
-              <span>&minus;{fmtMoney((OFFER.rsuTotal / OFFER.rsuYears) * 0.22)}</span>
-            </div>
-            <div className="eq-tax-row sub">
-              <span>&minus; CA state (8%)</span>
-              <span>&minus;{fmtMoney((OFFER.rsuTotal / OFFER.rsuYears) * 0.08)}</span>
-            </div>
-            <div className="eq-tax-row sub">
-              <span>&minus; FICA (7.65%)</span>
-              <span>&minus;{fmtMoney((OFFER.rsuTotal / OFFER.rsuYears) * 0.0765)}</span>
-            </div>
-            <div className="eq-tax-row total">
-              <span>Lands in your brokerage</span>
-              <span className="eq-tax-v">
-                {fmtMoney((OFFER.rsuTotal / OFFER.rsuYears) * (1 - 0.3765))}
-              </span>
-            </div>
-          </div>
+          {(() => {
+            const loc = BRIEF.location || {};
+            const fed = num(loc.fedEffectiveRate, 0.22);
+            const st = num(loc.stateEffectiveRate, 0.08);
+            const fica = num(loc.ficaRate, 0.0765);
+            const stateCode = loc.state || "State";
+            const vestVal = OFFER.rsuTotal / OFFER.rsuYears;
+            return (
+              <div className="eq-tax-math">
+                <div className="eq-tax-row">
+                  <span>Shares vest, worth</span>
+                  <span className="eq-tax-v">{fmtMoney(vestVal)}</span>
+                </div>
+                <div className="eq-tax-row sub">
+                  <span>&minus; Federal ({Math.round(fed * 100)}%)</span>
+                  <span>&minus;{fmtMoney(vestVal * fed)}</span>
+                </div>
+                {st > 0 && (
+                  <div className="eq-tax-row sub">
+                    <span>&minus; {stateCode} state ({Math.round(st * 100)}%)</span>
+                    <span>&minus;{fmtMoney(vestVal * st)}</span>
+                  </div>
+                )}
+                <div className="eq-tax-row sub">
+                  <span>&minus; FICA (7.65%)</span>
+                  <span>&minus;{fmtMoney(vestVal * fica)}</span>
+                </div>
+                <div className="eq-tax-row total">
+                  <span>Lands in your brokerage</span>
+                  <span className="eq-tax-v">{fmtMoney(vestVal * (1 - fed - st - fica))}</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </section>
 
@@ -266,31 +324,51 @@ const LAYOFF_EVENTS = [
   },
 ];
 
+// Map a percent string like "20%" to a severity tone.
+function layoffTone(pctStr) {
+  const n = parseFloat(String(pctStr || "").replace("%", ""));
+  return Number.isFinite(n) && n >= 15 ? "major" : "moderate";
+}
+
 function LayoffScreen({ onBack }) {
+  // Prefer the AI-generated layoffs; fall back to the Snap demo set if empty.
+  const events = (BRIEF.layoffs && BRIEF.layoffs.length)
+    ? BRIEF.layoffs.map((e) => ({
+        date: e.date,
+        pct: e.pct,
+        count: e.approxCount,
+        teams: e.teams || [],
+        notes: e.notes,
+        tone: layoffTone(e.pct),
+      }))
+    : LAYOFF_EVENTS;
+
+  const roundsWord = ["zero", "one", "two", "three", "four", "five", "six"][events.length] || events.length;
+
   return (
     <ScreenShell
       eyebrow="Stability flag"
-      title="Three layoff rounds in four years."
-      lede="Snap has reduced headcount three times since 2022. None of this means the offer is bad &mdash; it means you should know what you&rsquo;re walking into, and negotiate accordingly."
+      title={`${cap(String(roundsWord))} recent layoff ${events.length === 1 ? "round" : "rounds"} at ${OFFER.company}.`}
+      lede={`${OFFER.company} has reduced headcount ${events.length === 1 ? "once" : roundsWord + " times"} recently. None of this means the offer is bad — it means you should know what you're walking into, and negotiate accordingly. These are AI-generated estimates from public reporting.`}
       onBack={onBack}
     >
       {/* Stats strip */}
       <div className="lo-stats">
         <div className="lo-stat">
-          <div className="lo-stat-v">3</div>
-          <div className="lo-stat-l">layoff rounds<br/>since 2022</div>
+          <div className="lo-stat-v">{events.length}</div>
+          <div className="lo-stat-l">recent layoff<br/>{events.length === 1 ? "round" : "rounds"}</div>
         </div>
         <div className="lo-stat">
-          <div className="lo-stat-v">~32%</div>
-          <div className="lo-stat-l">cumulative<br/>headcount cut</div>
+          <div className="lo-stat-v">{events[0] ? (events[0].pct || "—") : "—"}</div>
+          <div className="lo-stat-l">largest single<br/>round</div>
         </div>
         <div className="lo-stat">
-          <div className="lo-stat-v">~2,050</div>
-          <div className="lo-stat-l">total<br/>employees affected</div>
+          <div className="lo-stat-v">{events[0] ? events[0].date : "—"}</div>
+          <div className="lo-stat-l">most recent<br/>round</div>
         </div>
         <div className="lo-stat">
-          <div className="lo-stat-v">9 mo</div>
-          <div className="lo-stat-l">shortest gap<br/>between rounds</div>
+          <div className="lo-stat-v">AI</div>
+          <div className="lo-stat-l">estimated from<br/>public reporting</div>
         </div>
       </div>
 
@@ -298,42 +376,41 @@ function LayoffScreen({ onBack }) {
       <section className="eq-section">
         <div className="sec-hd">
           <h2>The timeline.</h2>
-          <p>Each round hit different parts of the company. Here&rsquo;s what was cut, what severance
-             looked like, and what signal it sends.</p>
+          <p>Each round hit different parts of the company. Here&rsquo;s what was cut and what signal it sends.</p>
         </div>
         <ol className="lo-timeline">
-          {LAYOFF_EVENTS.map((e, i) => (
+          {events.map((e, i) => (
             <li key={i} className={"lo-event tone-" + e.tone}>
               <div className="lo-event-rail">
                 <div className="lo-event-dot" aria-hidden="true" />
-                {i < LAYOFF_EVENTS.length - 1 && <div className="lo-event-line" aria-hidden="true" />}
+                {i < events.length - 1 && <div className="lo-event-line" aria-hidden="true" />}
               </div>
               <div className="lo-event-card">
                 <div className="lo-event-hd">
                   <div>
                     <div className="lo-event-date">{e.date}</div>
-                    <h3>{e.pct} of workforce &middot; {e.count} employees</h3>
+                    <h3>{e.pct || "Some"} of workforce{e.count ? " · " + e.count + " employees" : ""}</h3>
                   </div>
                   <div className={"lo-event-chip chip-" + e.tone}>
                     {e.tone === "major" ? "Major" : "Moderate"}
                   </div>
                 </div>
-                <div className="lo-event-grid">
-                  <div>
-                    <div className="lo-event-lbl">Teams hit hardest</div>
-                    <ul className="lo-event-list">
-                      {e.teams.map((t, j) => <li key={j}>{t}</li>)}
-                    </ul>
+                {e.teams.length > 0 && (
+                  <div className="lo-event-grid">
+                    <div>
+                      <div className="lo-event-lbl">Teams hit hardest</div>
+                      <ul className="lo-event-list">
+                        {e.teams.map((t, j) => <li key={j}>{t}</li>)}
+                      </ul>
+                    </div>
                   </div>
-                  <div>
-                    <div className="lo-event-lbl">Severance offered</div>
-                    <p className="lo-event-txt">{e.sev}</p>
+                )}
+                {e.notes && (
+                  <div className="lo-event-notes">
+                    <div className="lo-event-lbl">What this signals</div>
+                    <p>{e.notes}</p>
                   </div>
-                </div>
-                <div className="lo-event-notes">
-                  <div className="lo-event-lbl">What this signals</div>
-                  <p>{e.notes}</p>
-                </div>
+                )}
               </div>
             </li>
           ))}
@@ -376,10 +453,10 @@ function LayoffScreen({ onBack }) {
           <li>
             <div className="lo-hook-ask">
               <span className="lo-hook-k">Ask for</span>
-              A larger sign-on bonus ($35k vs $25k)
+              A larger sign-on bonus ({fmtMoney(Math.round(OFFER.signOn * 1.4))} vs {fmtMoney(OFFER.signOn)})
             </div>
             <div className="lo-hook-why">
-              Sign-on is <strong>cash in 30 days</strong>. Even with the 12-month clawback, it&rsquo;s
+              Sign-on is <strong>cash in 30 days</strong>. Even with a clawback period, it&rsquo;s
               more reliable than 4 years of RSUs.
             </div>
           </li>
@@ -389,7 +466,7 @@ function LayoffScreen({ onBack }) {
               Written severance: 4 weeks base + 2 weeks per year
             </div>
             <div className="lo-hook-why">
-              Matches what Snap has historically paid in layoffs. Putting it in your offer letter
+              Matches what most tech companies pay in layoffs. Putting it in your offer letter
               means it&rsquo;s a contract, not a company policy they can revise.
             </div>
           </li>
@@ -413,30 +490,37 @@ function LayoffScreen({ onBack }) {
 // NEGOTIATION EMAIL SCREEN
 // ────────────────────────────────────────────────────────────────────────────
 
-const EMAIL_SECTIONS = [
+// Counter targets derived from the offer.
+const COUNTER_BASE = () => Math.round((OFFER.base * 1.09) / 1000) * 1000;
+const COUNTER_SIGNON = () => Math.round((OFFER.signOn * 1.4) / 1000) * 1000;
+
+function buildEmailSections() {
+  const city = (OFFER.location || "").split(",")[0].trim() || "the office";
+  const role = OFFER.role || "this role";
+  return [
   {
     key: "opening",
     label: "Opening",
     always: true,
-    body: "Hi Sarah,\n\nThanks so much for the offer — I'm genuinely excited about the team and the work you're doing. Before I sign, I had a few quick questions I'd love to clarify in writing.",
+    body: "Hi [Recruiter],\n\nThanks so much for the offer — I'm genuinely excited about the team and the work you're doing. Before I sign, I had a few quick questions I'd love to clarify in writing.",
   },
   {
     key: "refresh",
     label: "Refresh grants",
     default: true,
-    body: "1. Refresh grants. What's the typical cadence and size of refresh grants for engineers at the L3 level after the initial 4-year vest begins to ramp down?",
+    body: `1. Refresh grants. What's the typical cadence and size of refresh grants for ${role} after the initial vesting period begins to ramp down?`,
   },
   {
     key: "acceleration",
     label: "Equity acceleration",
     default: true,
-    body: "2. Equity acceleration. In the event of a layoff, does any portion of unvested RSUs accelerate? I'm asking in part because of the company's recent workforce changes, and I want to understand the downside honestly.",
+    body: "2. Equity acceleration. In the event of a layoff, does any portion of unvested RSUs accelerate? I'm asking because I want to understand the downside honestly.",
   },
   {
     key: "relo",
     label: "Relocation package",
     default: true,
-    body: "3. Relocation. Is there a relocation package available for the move to LA? If so, could you share the details (cash component, temporary housing, any clawback)?",
+    body: `3. Relocation. Is there a relocation package available for the move to ${city}? If so, could you share the details (cash component, temporary housing, any clawback)?`,
   },
   {
     key: "severance",
@@ -448,23 +532,25 @@ const EMAIL_SECTIONS = [
     key: "counter_base",
     label: "Counter: higher base",
     default: true,
-    body: "One ask on the comp itself: given the weight of the equity portion in this package relative to base, would there be room to move the base closer to $158,000? That would put the guaranteed portion more in line with roles I've been considering, and I'd be ready to sign this week.",
+    body: `One ask on the comp itself: given the weight of the equity portion in this package relative to base, would there be room to move the base closer to ${fmtMoney(COUNTER_BASE())}? That would put the guaranteed portion more in line with roles I've been considering, and I'd be ready to sign this week.`,
   },
   {
     key: "counter_signon",
     label: "Counter: larger sign-on",
     default: false,
-    body: "One ask on the comp: given the equity weight in this package, would there be flexibility to increase the sign-on bonus to $35,000? Sign-on is cash on a known timeline, which matters more to me than the same dollar amount in RSUs that vest over four years.",
+    body: `One ask on the comp: given the equity weight in this package, would there be flexibility to increase the sign-on bonus to ${fmtMoney(COUNTER_SIGNON())}? Sign-on is cash on a known timeline, which matters more to me than the same dollar amount in RSUs that vest over four years.`,
   },
   {
     key: "closing",
     label: "Closing",
     always: true,
-    body: "Thanks again — I really appreciate you working through these with me.\n\nBest,\nAlex",
+    body: "Thanks again — I really appreciate you working through these with me.\n\nBest,\n[Your name]",
   },
-];
+  ];
+}
 
 function NegotiationScreen({ onBack }) {
+  const EMAIL_SECTIONS = uM(() => buildEmailSections(), []);
   const [enabled, setEnabled] = uS(() => {
     const s = {};
     EMAIL_SECTIONS.forEach((sec) => { s[sec.key] = sec.always || sec.default; });
@@ -478,7 +564,7 @@ function NegotiationScreen({ onBack }) {
       .filter((s) => enabled[s.key])
       .map((s) => s.body)
       .join("\n\n");
-  }, [enabled]);
+  }, [enabled, EMAIL_SECTIONS]);
 
   const wordCount = emailText.trim().split(/\s+/).length;
 
@@ -521,7 +607,7 @@ function NegotiationScreen({ onBack }) {
                 onChange={() => setEnabled({ ...enabled, counter_base: true, counter_signon: false })}
               />
               <span className="neg-radio-dot" aria-hidden="true" />
-              <span>Counter on base<br/><em>$145k → $158k</em></span>
+              <span>Counter on base<br/><em>{fmtK(OFFER.base)} → {fmtK(COUNTER_BASE())}</em></span>
             </label>
             <label className="neg-radio">
               <input
@@ -529,7 +615,7 @@ function NegotiationScreen({ onBack }) {
                 onChange={() => setEnabled({ ...enabled, counter_base: false, counter_signon: true })}
               />
               <span className="neg-radio-dot" aria-hidden="true" />
-              <span>Counter on sign-on<br/><em>$25k → $35k</em></span>
+              <span>Counter on sign-on<br/><em>{fmtK(OFFER.signOn)} → {fmtK(COUNTER_SIGNON())}</em></span>
             </label>
             <label className="neg-radio">
               <input
@@ -559,8 +645,8 @@ function NegotiationScreen({ onBack }) {
         {/* Email preview */}
         <div className="neg-preview">
           <div className="neg-meta">
-            <div><span className="meta-k">To</span> sarah.chen@snap.com</div>
-            <div><span className="meta-k">From</span> alex.chen@berkeley.edu</div>
+            <div><span className="meta-k">To</span> recruiter@{BRIEF.companyDomain || "company.com"}</div>
+            <div><span className="meta-k">From</span> you@email.com</div>
             <div><span className="meta-k">Subject</span> Following up on my offer — a few questions</div>
           </div>
 
@@ -606,8 +692,8 @@ function NegotiationScreen({ onBack }) {
         </div>
         <ul className="neg-tips-list">
           <li>
-            <strong>Replace the names.</strong> &ldquo;Sarah&rdquo; and &ldquo;Alex&rdquo; are placeholders.
-            Swap your recruiter&rsquo;s real name and yours.
+            <strong>Replace the placeholders.</strong> &ldquo;[Recruiter]&rdquo; and &ldquo;[Your name]&rdquo;
+            are placeholders &mdash; swap in your recruiter&rsquo;s real name and yours before sending.
           </li>
           <li>
             <strong>Send Tue&ndash;Thu morning.</strong> Your recruiter is more likely to reply quickly

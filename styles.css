@@ -780,3 +780,123 @@ html[data-learn="on"] .tooltip { display: none !important; }
   font-size: 13px;
   font-weight: 500;
 }
+
+/* ── New dynamic sections (brief-driven) ─────────────────────────────────── */
+
+/* AI estimate badge */
+.ai-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-60); background: var(--paper-2);
+  border: 1px solid var(--hairline); border-radius: 999px;
+  padding: 2px 7px; margin-left: 8px; vertical-align: middle;
+}
+.ai-badge-dot {
+  width: 5px; height: 5px; border-radius: 999px;
+  background: var(--accent); flex-shrink: 0;
+}
+
+/* Offer input — upload + filename */
+.offer-input-upload {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--accent);
+  padding: 10px 14px; border: 1px dashed var(--accent-soft);
+  border-radius: 10px; cursor: pointer; transition: all 0.15s;
+}
+.offer-input-upload:hover { background: var(--accent-softer); border-color: var(--accent); }
+.offer-input-file { font-family: var(--font-mono); font-size: 12px; color: var(--ink-60); }
+
+/* Equity — private company note */
+.equity-private {
+  background: var(--paper-2); border: 1px solid var(--hairline);
+  border-radius: var(--r-md); padding: 18px 20px;
+  font-size: 14.5px; line-height: 1.65; color: var(--ink-80);
+}
+
+/* Stability — no layoffs (positive) */
+.card-flag-ok { border-left: 3px solid var(--accent); }
+
+/* Stock chart — empty state */
+.stock-live-empty {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 120px; padding: 20px;
+}
+.stock-live-empty-msg {
+  font-size: 13.5px; color: var(--ink-60); text-align: center; line-height: 1.6;
+}
+
+/* Benefits card */
+.benefits-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.benefit-item {
+  border: 1px solid var(--hairline); border-radius: var(--r-md);
+  padding: 14px 16px; background: var(--paper); display: flex;
+  flex-direction: column; gap: 6px;
+}
+.benefit-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.benefit-name { font-weight: 600; font-size: 14.5px; color: var(--ink); }
+.benefit-conf {
+  font-family: var(--font-mono); font-size: 9.5px; text-transform: uppercase;
+  letter-spacing: 0.04em; padding: 2px 6px; border-radius: 999px;
+}
+.conf-high { background: var(--accent-soft); color: var(--accent-ink); }
+.conf-medium { background: var(--paper-3); color: var(--ink-60); }
+.conf-low { background: var(--warn-soft); color: var(--warn); }
+.benefit-desc { font-size: 13px; color: var(--ink-60); line-height: 1.55; }
+.benefit-val {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+
+/* Location card */
+.location-grid { display: grid; grid-template-columns: minmax(140px, 0.6fr) 1.4fr; gap: 22px; }
+.location-stats { display: flex; flex-direction: column; gap: 14px; }
+.location-stat { border-left: 2px solid var(--accent-soft); padding-left: 12px; }
+.location-stat-v {
+  font-family: var(--font-serif); font-size: 24px; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.location-stat-l { font-family: var(--font-mono); font-size: 11px; color: var(--ink-60); margin-top: 4px; }
+.location-demo { font-size: 14.5px; color: var(--ink-80); line-height: 1.65; }
+.location-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.location-tag {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--accent-softer); color: var(--accent-ink); font-weight: 500;
+}
+
+/* Caveats line */
+.caveats-line {
+  display: flex; gap: 10px; align-items: flex-start;
+  font-size: 12.5px; color: var(--ink-60); line-height: 1.55;
+  padding: 14px 16px; margin-top: 8px;
+  background: var(--paper-2); border-radius: var(--r-md);
+}
+.caveats-icon { color: var(--accent); flex-shrink: 0; font-size: 14px; }
+
+/* Compare CTA + table */
+.cta-compare { background: var(--paper-2); }
+.cmp-table { display: flex; flex-direction: column; border: 1px solid var(--hairline); border-radius: var(--r-md); overflow: hidden; }
+.cmp-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; border-bottom: 1px solid var(--hairline); }
+.cmp-row:last-child { border-bottom: 0; }
+.cmp-head { background: var(--paper-2); }
+.cmp-head .cmp-cell { font-family: var(--font-serif); font-weight: 700; font-size: 15px; color: var(--ink); }
+.cmp-metric {
+  padding: 12px 16px; font-size: 13px; color: var(--ink-60);
+  border-right: 1px solid var(--hairline); display: flex; align-items: center;
+}
+.cmp-cell {
+  padding: 12px 16px; font-variant-numeric: tabular-nums; font-size: 14px;
+  font-family: var(--font-mono); color: var(--ink-80);
+  border-right: 1px solid var(--hairline); display: flex; align-items: center;
+}
+.cmp-cell:last-child { border-right: 0; }
+.cmp-win { background: var(--accent-softer); color: var(--accent-ink); font-weight: 600; }
+
+@media (max-width: 640px) {
+  .location-grid { grid-template-columns: 1fr; }
+  .cmp-row { grid-template-columns: 1.2fr 1fr 1fr; }
+  .cmp-metric, .cmp-cell { padding: 10px; font-size: 12.5px; }
+}
