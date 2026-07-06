@@ -226,6 +226,13 @@ a { color: inherit; }
   display: flex; align-items: center; justify-content: center;
   letter-spacing: -0.02em;
 }
+.meta-co-logo {
+  background: #fff;
+  border: 1px solid var(--hairline);
+  object-fit: contain;
+  padding: 4px;
+  flex-shrink: 0;
+}
 .meta-co-name {
   font-size: 17px; font-weight: 600; letter-spacing: -0.015em;
 }
@@ -243,6 +250,22 @@ a { color: inherit; }
   background: var(--accent-soft); color: var(--accent-ink);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px;
+}
+.meta-new-offer {
+  margin-left: 8px;
+  padding: 5px 12px;
+  border: 1px dashed var(--hairline);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-60);
+  font-family: var(--font-mono); font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.meta-new-offer:hover {
+  background: var(--accent-softer);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* ────────── Headline ────────── */
@@ -814,8 +837,16 @@ html[data-learn="on"] .tooltip { display: none !important; }
   font-size: 14.5px; line-height: 1.65; color: var(--ink-80);
 }
 
-/* Stability — no layoffs (positive) */
-.card-flag-ok { border-left: 3px solid var(--accent); }
+/* Stability — no layoffs (positive). Unlike the warning variant, this card has
+   no icon column and isn't clickable, so undo the 40px grid, warn tint, pointer
+   cursor, and hover lift inherited from .card-flag. */
+.card-flag-ok {
+  display: flex; flex-direction: column;
+  background: var(--card); border-color: var(--card-bd);
+  border-left: 3px solid var(--accent);
+  cursor: default;
+}
+.card-flag-ok:hover { transform: none; box-shadow: var(--card-shadow); }
 
 /* Stock chart — empty state */
 .stock-live-empty {

@@ -282,14 +282,29 @@ function Header({ learn, onLearn }) {
   );
 }
 
-function MetaStrip() {
+function MetaStrip({ onNewOffer }) {
+  const [logoErr, setLogoErr] = useS(false);
+  const domain = BRIEF.companyDomain;
   const mark = (OFFER.company || "?").trim().charAt(0).toUpperCase();
   const tag = BRIEF.ticker ? "NYSE/Nasdaq: " + BRIEF.ticker : (BRIEF.isPublic === false ? "Private" : null);
+
+  // Reset error state if the company changes (e.g. after re-parsing a new offer).
+  React.useEffect(() => { setLogoErr(false); }, [domain]);
+
   return (
     <div className="meta-strip">
       <div className="meta-strip-row">
         <div className="meta-co">
-          <div className="meta-co-mark" aria-hidden="true">{mark}</div>
+          {domain && !logoErr ? (
+            <img
+              className="meta-co-mark meta-co-logo"
+              src={logoUrl(domain)}
+              alt={`${OFFER.company} logo`}
+              onError={() => setLogoErr(true)}
+            />
+          ) : (
+            <div className="meta-co-mark" aria-hidden="true">{mark}</div>
+          )}
           <div>
             <div className="meta-co-name">{OFFER.company}{tag && <span className="meta-co-tag"> · {tag}</span>}</div>
             <div className="meta-co-sub">{OFFER.role} &nbsp;·&nbsp; {OFFER.location}</div>
@@ -298,6 +313,11 @@ function MetaStrip() {
         <div className="meta-parsed">
           <span className="meta-parsed-check" aria-hidden="true">✓</span>
           <span>Offer letter parsed · just now</span>
+          {onNewOffer && (
+            <button className="meta-new-offer" onClick={onNewOffer}>
+              Decode another offer
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -958,6 +978,7 @@ function App() {
   const [t, setT] = useTweaks(TWEAK_DEFAULTS);
   const [screen, setScreen] = useS("dashboard"); // dashboard | equity | layoff | negotiation
   const [offerVersion, setOfferVersion] = useS(0); // bump to force dashboard re-render after parseOffer mutates OFFER/Y1
+  const [showInput, setShowInput] = useS(false); // re-show the paste UI after an offer is already parsed
 
   const acc = ACCENTS[t.accent] || ACCENTS.forest;
 
@@ -989,10 +1010,15 @@ function App() {
         <ErrorBoundary key={screen + ":" + offerVersion}>
         {screen === "dashboard" && (
           <>
-            <OfferInput onDecoded={() => setOfferVersion((v) => v + 1)} />
+            {(offerVersion === 0 || showInput) && (
+              <OfferInput onDecoded={() => { setOfferVersion((v) => v + 1); setShowInput(false); }} />
+            )}
             {offerVersion > 0 ? (
               <div key={offerVersion}>
-                <MetaStrip />
+                <MetaStrip onNewOffer={() => {
+                  setShowInput(true);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }} />
                 <Headline />
                 <BreakdownCards />
                 <EquityCard onOpen={() => setScreen("equity")} />
