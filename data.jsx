@@ -1,23 +1,26 @@
 // data.jsx — sample offer data + derived calculations + stock history
 
+// Neutral placeholder until an offer is decoded — no company-specific branding.
+// applyParsedOffer() fills these in from the parsed offer letter.
 const OFFER = {
-  company: "Snap Inc.",
-  companyTag: "NYSE: SNAP",
-  role: "Software Engineer, New Grad (L3)",
-  location: "Los Angeles, CA",
-  base: 145000,
-  signOn: 25000,
-  rsuTotal: 180000,
+  company: "",
+  companyTag: "",
+  role: "",
+  location: "",
+  base: 0,
+  signOn: 0,
+  rsuTotal: 0,
   rsuYears: 4,
-  bonusPct: 0.10,
+  bonusPct: 0,
 };
 
 // BRIEF — the Claude-generated company/location context (taxes, rent, perks,
-// layoffs, demographics, flags). Seeded with Snap demo data so the initial
-// render isn't empty; mutated in place by applyBrief() after an offer decodes.
+// layoffs, demographics, flags). Company-specific fields start empty (no demo
+// branding); location holds neutral CA/LA fallbacks used by computeTakeHome
+// until a real brief arrives. Mutated in place by applyBrief() after decode.
 const BRIEF = {
-  ticker: "SNAP",
-  companyDomain: "snap.com",
+  ticker: null,
+  companyDomain: null,
   isPublic: true,
   location: {
     city: "Los Angeles", state: "CA",
@@ -161,6 +164,9 @@ function sanitizeBrief(b) {
 function applyBrief(next) {
   if (!next || typeof next !== "object") return;
   sanitizeBrief(next);
+  // Don't let a brief that couldn't find a domain wipe out the one the fast
+  // parse step already resolved for the logo.
+  if (!next.companyDomain && BRIEF.companyDomain) next.companyDomain = BRIEF.companyDomain;
   if (!next.location) next.location = BRIEF.location;
   if (!next.location.demographics) next.location.demographics = { summary: null, notableGroups: [], notes: null };
   if (!Array.isArray(next.benefits)) next.benefits = [];

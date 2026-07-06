@@ -2,6 +2,21 @@
 
 const { useState: useS } = React;
 
+// logo.dev publishable token. Publishable tokens are meant to be exposed in
+// frontend code — restrict it to your domain(s) in the logo.dev dashboard.
+// Get one free at https://logo.dev, then paste it below.
+const LOGO_DEV_TOKEN = "pk_MJTcnqliStyEbKyc0B6Nmw";
+
+// Build a logo.dev image URL for a company domain.
+//   fallback=404 → return a real 404 when no logo exists, so the <img onError>
+//     handler can fall back to just the company name. Without it, logo.dev
+//     serves a generic monogram and onError never fires.
+//   size=128 → crisp at the 48px render height (2x+ for retina).
+function logoUrl(domain) {
+  return `https://img.logo.dev/${domain}` +
+    `?token=${LOGO_DEV_TOKEN}&size=128&format=png&fallback=404`;
+}
+
 // Apply the parsed offer fields onto the shared OFFER object (in place).
 function applyParsedOffer(parsed) {
   Object.assign(OFFER, {
@@ -15,6 +30,12 @@ function applyParsedOffer(parsed) {
     bonusPct:   parsed.annualBonusPercent ?? OFFER.bonusPct,
     companyTag: "",
   });
+  // Resolve the logo/company identity from the fast parse so the header updates
+  // immediately, instead of waiting on (or being stuck if it fails) the slower,
+  // best-effort brief call. Also clears any prior company's domain/ticker so a
+  // stale logo can never leak onto a different offer.
+  BRIEF.companyDomain = parsed.companyDomain || null;
+  BRIEF.ticker = null;
 }
 
 // ── ErrorBoundary — keeps one bad render from blanking the whole page ───────
@@ -200,38 +221,24 @@ function WelcomeBanner({ onClose }) {
 function Header({ learn, onLearn }) {
   const [logoErr, setLogoErr] = useS(false);
   const domain = BRIEF.companyDomain;
-  const companyName = (OFFER.company && OFFER.company.name) || OFFER.company;
+  const companyName = (OFFER.company && OFFER.company.name) || OFFER.company || "";
 
   // Reset error state if the company changes (e.g. after re-parsing a new offer).
   React.useEffect(() => { setLogoErr(false); }, [domain]);
 
-  const showFallback = logoErr || !domain;
+  // Show the Clearbit logo only when we have a domain and it loaded. If there's
+  // no domain, or it 404s, we fall back to just the company name (no generic
+  // placeholder icon). Before any offer is decoded, show a neutral label.
+  const showLogo = !!domain && !logoErr;
+  const label = companyName || "Your offer";
 
   return (
     <header className="site-hd">
       <div className="site-hd-inner">
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          {showFallback ? (
-            // lucide-react Briefcase fallback — used when the Clearbit logo 404s
-            // or the company has no domain yet.
-            <svg
-              viewBox="0 0 24 24"
-              width="48"
-              height="48"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              style={{ flexShrink: 0, color: "var(--ink-60)" }}
-            >
-              <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-            </svg>
-          ) : (
+          {showLogo && (
             <img
-              src={`https://logo.clearbit.com/${domain}`}
+              src={logoUrl(domain)}
               alt={`${companyName} logo`}
               height="48"
               onError={() => setLogoErr(true)}
@@ -249,13 +256,13 @@ function Header({ learn, onLearn }) {
             style={{
               fontWeight: 600,
               fontSize: 18,
-              color: "var(--ink)",
+              color: companyName ? "var(--ink)" : "var(--ink-60)",
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
             }}
           >
-            {companyName}
+            {label}
           </span>
         </div>
         <div className="site-hd-title">Your offer, decoded</div>
@@ -931,6 +938,22 @@ const ACCENTS = {
   slate:  { accent: "oklch(0.30 0.01 240)", accentSoft: "oklch(0.93 0.005 240)", accentInk: "oklch(0.22 0.01 240)" },
 };
 
+// Neutral pre-decode state — shown until an offer letter is submitted, so no
+// company-specific demo data is on screen before the user acts.
+function EmptyState() {
+  return (
+    <section
+      className="empty-state"
+      style={{ textAlign: "center", padding: "40px 16px", color: "var(--ink-60)", maxWidth: 560, margin: "0 auto" }}
+    >
+      <p style={{ fontSize: 16, lineHeight: 1.5, margin: 0 }}>
+        Paste or upload your offer letter above and we&rsquo;ll decode it here —
+        your take-home pay, equity, benefits, and company context, in plain English.
+      </p>
+    </section>
+  );
+}
+
 function App() {
   const [t, setT] = useTweaks(TWEAK_DEFAULTS);
   const [screen, setScreen] = useS("dashboard"); // dashboard | equity | layoff | negotiation
@@ -967,19 +990,23 @@ function App() {
         {screen === "dashboard" && (
           <>
             <OfferInput onDecoded={() => setOfferVersion((v) => v + 1)} />
-            <div key={offerVersion}>
-              <MetaStrip />
-              <Headline />
-              <BreakdownCards />
-              <EquityCard onOpen={() => setScreen("equity")} />
-              <StabilityCard onOpen={() => setScreen("layoff")} />
-              <BenefitsCard />
-              <LocationCard />
-              <MissingCard />
-              <NegotiationCTA onOpen={() => setScreen("negotiation")} />
-              <CompareCTA onOpen={() => setScreen("compare")} />
-              <CaveatsLine />
-            </div>
+            {offerVersion > 0 ? (
+              <div key={offerVersion}>
+                <MetaStrip />
+                <Headline />
+                <BreakdownCards />
+                <EquityCard onOpen={() => setScreen("equity")} />
+                <StabilityCard onOpen={() => setScreen("layoff")} />
+                <BenefitsCard />
+                <LocationCard />
+                <MissingCard />
+                <NegotiationCTA onOpen={() => setScreen("negotiation")} />
+                <CompareCTA onOpen={() => setScreen("compare")} />
+                <CaveatsLine />
+              </div>
+            ) : (
+              <EmptyState />
+            )}
           </>
         )}
         {screen === "equity" && <EquityScreen onBack={goBack} />}

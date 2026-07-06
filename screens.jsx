@@ -294,36 +294,6 @@ function EquityScreen({ onBack }) {
 // LAYOFF HISTORY SCREEN
 // ────────────────────────────────────────────────────────────────────────────
 
-const LAYOFF_EVENTS = [
-  {
-    date: "Aug 2022",
-    pct: "20%",
-    count: "~1,300",
-    teams: ["Hardware (Spectacles, original team)", "Enterprise sales", "Pixy drone team"],
-    sev: "12 weeks base + 2 weeks per year worked + accelerated vesting through Dec 2022",
-    notes: "CEO cited a \"challenging\" macro environment. The hardware cuts were particularly deep — entire product lines shuttered.",
-    tone: "major",
-  },
-  {
-    date: "Feb 2023",
-    pct: "10%",
-    count: "~500",
-    teams: ["Content moderation", "Music/sound infra", "Central eng platform"],
-    sev: "10 weeks base + 2 weeks per year worked + 6 months of health coverage",
-    notes: "Part of a broader tech-wide wave. Focused on \"consolidation\" rather than bad performance — most affected employees had strong reviews.",
-    tone: "moderate",
-  },
-  {
-    date: "Jun 2024",
-    pct: "5%",
-    count: "~250",
-    teams: ["Managers only (flattening the org)", "Product managers"],
-    sev: "10 weeks base + 2 weeks per year worked",
-    notes: "Targeted \"layers of management\" rather than individual contributors. New grad engineers largely untouched.",
-    tone: "moderate",
-  },
-];
-
 // Map a percent string like "20%" to a severity tone.
 function layoffTone(pctStr) {
   const n = parseFloat(String(pctStr || "").replace("%", ""));
@@ -331,7 +301,8 @@ function layoffTone(pctStr) {
 }
 
 function LayoffScreen({ onBack }) {
-  // Prefer the AI-generated layoffs; fall back to the Snap demo set if empty.
+  // Only the AI-generated layoffs — no fabricated demo data. If none were found,
+  // show a company-named empty state below rather than another company's history.
   const events = (BRIEF.layoffs && BRIEF.layoffs.length)
     ? BRIEF.layoffs.map((e) => ({
         date: e.date,
@@ -341,7 +312,24 @@ function LayoffScreen({ onBack }) {
         notes: e.notes,
         tone: layoffTone(e.pct),
       }))
-    : LAYOFF_EVENTS;
+    : [];
+
+  const companyLabel = OFFER.company || "this company";
+
+  if (events.length === 0) {
+    return (
+      <ScreenShell
+        eyebrow="Stability check"
+        title={`No recent layoffs found for ${companyLabel}.`}
+        lede={`We didn't surface well-known recent reductions for ${companyLabel} from public reporting. Absence of evidence isn't a guarantee — it's still worth asking about severance and equity acceleration before you sign.`}
+        onBack={onBack}
+      >
+        <section className="eq-section">
+          <p>There's no layoff history to show for {companyLabel} right now. These estimates come from AI reading public reporting, so newer or smaller reductions may not appear.</p>
+        </section>
+      </ScreenShell>
+    );
+  }
 
   const roundsWord = ["zero", "one", "two", "three", "four", "five", "six"][events.length] || events.length;
 

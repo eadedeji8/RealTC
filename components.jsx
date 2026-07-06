@@ -267,8 +267,8 @@ function StockChartLive({ ticker, height = 180 }) {
     return (
       <div className="stock-live stock-live-empty">
         <div className="stock-live-empty-msg">
-          No public stock data for {ticker ? ticker.toUpperCase() : "this company"}.
-          {" "}If this is a private company, its RSU value can&rsquo;t be charted &mdash; see the note below.
+          We couldn&rsquo;t load recent stock data for {ticker ? ticker.toUpperCase() : "this company"} right now.
+          {" "}The market data service may be unavailable or rate-limited &mdash; try again shortly.
         </div>
       </div>
     );
