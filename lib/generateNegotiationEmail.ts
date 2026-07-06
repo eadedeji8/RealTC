@@ -1,3 +1,7 @@
+// TODO: this generator is not wired up anywhere — the negotiation screen still
+// builds a static template client-side (see buildEmailSections in screens.jsx).
+// Add a server route (e.g. POST /api/negotiation-email in server.js) that calls
+// this and have the screen fetch it, or delete this file.
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic();
@@ -21,7 +25,7 @@ Return ONLY the email text (subject line + body). No preamble, no explanation, n
 ${JSON.stringify(parsedOffer, null, 2)}`;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
     max_tokens: 2048,
     system,
     messages: [{ role: "user", content: userMessage }],

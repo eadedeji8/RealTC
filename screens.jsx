@@ -30,25 +30,36 @@ function EquityScreen({ onBack }) {
   const [scenario, setScenario] = uS("flat"); // flat | up | down | custom
   const [customPct, setCustomPct] = uS(0);
   const [livePrice, setLivePrice] = uS(null);
+  const [priceState, setPriceState] = uS("loading"); // loading | ready | error
 
   const isPrivate = BRIEF.isPublic === false || !BRIEF.ticker;
 
-  // Pull the latest real close for the company ticker (display only — totals are
-  // share-count invariant). Falls back to the demo series price.
+  // Pull the latest real close for the company ticker. There is no fabricated
+  // fallback series — if real data can't be loaded, we show an error state
+  // below instead of modeling against a made-up price.
   uE(() => {
     let cancelled = false;
     if (BRIEF.ticker) {
       getStockData(BRIEF.ticker).then((pts) => {
-        if (!cancelled && pts && pts.length) setLivePrice(pts[pts.length - 1].close);
+        if (cancelled) return;
+        if (pts && pts.length) {
+          setLivePrice(pts[pts.length - 1].close);
+          setPriceState("ready");
+        } else {
+          setPriceState("error");
+        }
       });
     }
     return () => { cancelled = true; };
   }, []);
 
   const taxRate = Y1.combinedTax || 0.3765;
-  const today = livePrice || STOCK_HISTORY[STOCK_HISTORY.length - 1][1];
+  const today = livePrice || 0;
   // Total shares granted: RSU grant / current price
-  const totalShares = Math.round(OFFER.rsuTotal / today);
+  const totalShares = today > 0 ? Math.round(OFFER.rsuTotal / today) : 0;
+  // TODO: honor the parsed vesting terms (rsuVestingYears / rsuCliffMonths from
+  // parseOffer) instead of assuming a 4-year quarterly schedule with a 12-month
+  // cliff — the simulation below hardcodes 16 quarters with the cliff at Q4.
   const sharesPerYear = totalShares / OFFER.rsuYears; // 25% year 1, then quarterly
 
   // Scenario price trajectory over 4 years (relative to today)
@@ -110,6 +121,34 @@ function EquityScreen({ onBack }) {
             <li><strong>Ask about liquidity.</strong> Is there a tender-offer program, or do you wait for an exit?
               What happens to unvested shares if you leave?</li>
           </ol>
+        </section>
+      </ScreenShell>
+    );
+  }
+
+  // Public company, but no real price yet — loading or failed. Never model
+  // against a fabricated price; say so instead.
+  if (priceState !== "ready") {
+    return (
+      <ScreenShell
+        eyebrow="Equity reality check"
+        title={`Your ${fmtMoney(OFFER.rsuTotal)} RSU grant.`}
+        lede="Modeling your vest schedule requires the current stock price."
+        onBack={onBack}
+      >
+        <section className="eq-section">
+          <div className="equity-private">
+            {priceState === "loading" ? (
+              <p>Loading the latest stock price for <strong>{BRIEF.ticker}</strong>&hellip;</p>
+            ) : (
+              <p>
+                We couldn&rsquo;t load live stock data for <strong>{BRIEF.ticker}</strong> right now,
+                so we won&rsquo;t model your vest schedule against a made-up price. Try again in a
+                few minutes. The <strong>{fmtMoney(OFFER.rsuTotal)}</strong> on your offer letter is
+                still today&rsquo;s estimated value of the grant — not a guaranteed payout.
+              </p>
+            )}
+          </div>
         </section>
       </ScreenShell>
     );
@@ -434,6 +473,9 @@ function LayoffScreen({ onBack }) {
       </section>
 
       {/* Negotiation hooks */}
+      {/* TODO: these asks are hardcoded (sign-on × 1.4, "4 weeks + 2 weeks/year"
+          severance, 6-month acceleration) — derive them from the brief/offer or
+          generate them with Claude alongside the rest of the brief. */}
       <section className="eq-section lo-hooks">
         <div className="card-eyebrow">Three things to ask for</div>
         <h2>Specific asks this history earns you.</h2>
@@ -479,8 +521,15 @@ function LayoffScreen({ onBack }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 // Counter targets derived from the offer.
+// TODO: the ×1.09 / ×1.4 multipliers are arbitrary hardcoded heuristics — either
+// justify them with market data in the brief or let Claude propose the counters.
 const COUNTER_BASE = () => Math.round((OFFER.base * 1.09) / 1000) * 1000;
 const COUNTER_SIGNON = () => Math.round((OFFER.signOn * 1.4) / 1000) * 1000;
+
+// TODO: this whole email is a static template with numbers interpolated in.
+// lib/generateNegotiationEmail.ts already exists to generate a genuinely
+// personalized email with Claude but is not wired up — add a server route
+// (e.g. POST /api/negotiation-email) and use it here, or delete that file.
 
 function buildEmailSections() {
   const city = (OFFER.location || "").split(",")[0].trim() || "the office";

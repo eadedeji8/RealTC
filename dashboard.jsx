@@ -18,6 +18,9 @@ function logoUrl(domain) {
 }
 
 // Apply the parsed offer fields onto the shared OFFER object (in place).
+// TODO: parseOffer also extracts rsuCliffMonths and signOnClawbackMonths but
+// they're dropped here — carry them onto OFFER and use them in the equity
+// screen's vest simulation and the clawback jargon/copy.
 function applyParsedOffer(parsed) {
   Object.assign(OFFER, {
     company:    parsed.company    ?? OFFER.company,
@@ -549,11 +552,13 @@ function StabilityCard({ onOpen }) {
   );
 }
 
+// Generic fallback list, used only when the AI brief returns no missingFlags.
+// Keep this company/location-agnostic — it can show for any offer.
 const MISSING_ITEMS = [
   {
     key: "refresh",
     label: "Refresh grant policy",
-    why: <>After your initial 4-year RSU grant vests, your equity drops to zero unless the company issues
+    why: <>After your initial RSU grant vests, your equity drops to zero unless the company issues
       a <JargonTerm term="refresh">refresh grant</JargonTerm>. Many top companies refresh annually starting
       year 2 or 3. Ask: &ldquo;What&rsquo;s your typical refresh cadence and size for engineers at my level?&rdquo;</>,
   },
@@ -562,13 +567,13 @@ const MISSING_ITEMS = [
     label: "Equity acceleration on termination",
     why: <>If the company lays you off, do your next-to-vest shares <JargonTerm term="equity acceleration">
       accelerate</JargonTerm>? Some companies offer 3–12 months of acceleration, especially in a severance
-      package. Given the layoff history here, this is worth asking about directly.</>,
+      package. It costs nothing to ask directly.</>,
   },
   {
     key: "relocation",
     label: "Relocation package details",
-    why: <>The offer mentions LA but says nothing about relo. Typical new-grad relo packages are $5k–$15k
-      in cash + temporary housing. If you&rsquo;re moving across the country, ask for the specifics in
+    why: <>If the role means moving, check whether the offer covers relocation. Typical new-grad relo
+      packages are $5k–$15k in cash + temporary housing. Ask for the specifics in
       writing &mdash; and whether any of it has its own clawback.</>,
   },
   {
@@ -654,7 +659,7 @@ function NegotiationCTA({ onOpen }) {
       </div>
       <div className="cta-actions">
         <span className="cta-btn">Read the full draft <span aria-hidden="true">→</span></span>
-        <span className="cta-sub">4 tailored questions · ready to send in under a minute</span>
+        <span className="cta-sub">Personalized to your numbers · ready to send in under a minute</span>
       </div>
     </section>
   );

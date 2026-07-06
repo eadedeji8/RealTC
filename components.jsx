@@ -153,6 +153,9 @@ function loadPdfJs() {
 }
 
 // ── StockChart — responsive line chart (recharts in ticker mode, SVG otherwise)
+// TODO: the static `data`/`annotations` SVG branch below is now unused — the demo
+// STOCK_HISTORY series was removed and every caller passes a ticker. Delete the
+// SVG branch (and the `data`/`annotations` props) or find a real use for it.
 function StockChart({ data, annotations = [], height = 140, ticker }) {
   if (ticker) return <StockChartLive ticker={ticker} height={height} />;
   const wrapRef = useRef(null);
